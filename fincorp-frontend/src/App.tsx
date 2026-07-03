@@ -3,6 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import api, { keycloak } from './services/api';
 import { UserRole } from './types';
+import AIAssistantUI from './components/AIAssistantUI';
 
 // Declare Chart.js globally since it is loaded via CDN in index.html
 declare global {
@@ -917,35 +918,30 @@ const Dashboard: React.FC<DashboardProps> = ({ theme }) => {
         const [txRes, invRes, payRes] = await Promise.all([
           api.get('/transactions'),
           api.get('/invoices'),
-          api.get('/payroll/my')
+          api.get('/payroll')
         ]);
         setTransactions(txRes.data);
         setInvoices(invRes.data);
         setPayrolls(payRes.data);
+        // Pending approvals = transaksi berstatus "Menunggu Approval" dari database
+        const pending = txRes.data
+          .filter((t: any) => t.status === 'Menunggu Approval')
+          .map((t: any) => ({
+            id: t.transactionId,
+            date: t.transactionDate,
+            submitter: t.creatorEmail,
+            amount: t.amount,
+            purpose: t.description,
+            status: t.status
+          }));
+        setPendingApprovals(pending);
       } catch (err) {
-        console.warn('API error, falling back to static mock data in Dashboard', err);
-        setTransactions([
-          { transactionId: 'TX-001', type: 'Pendapatan', amount: 250000000, category: 'Kontrak Proyek IT' },
-          { transactionId: 'TX-002', type: 'Pendapatan', amount: 180000000, category: 'Instalasi Elektrikal' },
-          { transactionId: 'TX-003', type: 'Pengeluaran', amount: 60000000, category: 'Instalasi Elektrikal' },
-          { transactionId: 'TX-004', type: 'Pengeluaran', amount: 45000000, category: 'Gaji & Payroll' }
-        ]);
-        setInvoices([
-          { invoiceId: 'INV-001', clientName: 'PT Telkom Indonesia', amount: 120000000, status: 'Lunas' },
-          { invoiceId: 'INV-002', clientName: 'PT PLN (Persero)', amount: 85000000, status: 'Belum Lunas' }
-        ]);
-        setPayrolls([
-          { payrollId: 'SL-JUNI', period: 'Juni 2026', netSalary: 10426462, bonus: 1211250, baseSalary: 8500000, releaseDate: '2026-06-28' },
-          { payrollId: 'SL-MEI', period: 'Mei 2026', netSalary: 9850000, bonus: 850000, baseSalary: 8500000, releaseDate: '2026-05-28' }
-        ]);
-        setReimbursements([
-          { id: 'RMB-001', date: '2026-07-01', purpose: 'Pembelian Kabel Fiber Optik (Site A)', amount: 45000000, status: 'Menunggu Approval' },
-          { id: 'RMB-002', date: '2026-06-15', purpose: 'Transport & Akomodasi Tim Teknis', amount: 3500000, status: 'Disetujui' }
-        ]);
-        setPendingApprovals([
-          { id: 'TX-008', date: '2026-07-02', submitter: 'Agus Pratama', amount: 75000000, purpose: 'Pengadaan Sub-Panel Listrik Proyek Sudirman', status: 'Menunggu Approval' },
-          { id: 'RMB-001', date: '2026-07-01', submitter: 'Agus Pratama', amount: 45000000, purpose: 'Pembelian Kabel Fiber Optik (Site A)', status: 'Menunggu Approval' }
-        ]);
+        console.warn('API error on Dashboard, akan menampilkan data kosong', err);
+        setTransactions([]);
+        setInvoices([]);
+        setPayrolls([]);
+        setReimbursements([]);
+        setPendingApprovals([]);
       } finally {
         setLoading(false);
       }
@@ -1259,7 +1255,7 @@ const Dashboard: React.FC<DashboardProps> = ({ theme }) => {
             { month: 'Apr', rev: 210, exp: 105 },
             { month: 'Mei', rev: 190, exp: 90 },
             { month: 'Jun', rev: 250, exp: 130 }
-          ].map((data, index) => {
+          ].map((data) => {
             const revHeight = (data.rev / 250) * 100;
             const expHeight = (data.exp / 250) * 100;
             return (
@@ -1385,9 +1381,10 @@ const Dashboard: React.FC<DashboardProps> = ({ theme }) => {
 // ==========================================
 interface TransactionsProps {
   theme: ThemeMode;
+  userRole?: UserRole | null;
 }
 
-const Transactions: React.FC<TransactionsProps> = ({ theme }) => {
+const Transactions: React.FC<TransactionsProps> = ({ theme, userRole }) => {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -1395,7 +1392,6 @@ const Transactions: React.FC<TransactionsProps> = ({ theme }) => {
   const [category, setCategory] = useState('Kontrak Proyek IT');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const userRole = localStorage.getItem('mock_user_role') || 'staff';
 
   const isDark = theme === 'dark';
   const cardClass = isDark ? 'bg-[#18181b]/50 border-zinc-800/80 text-zinc-300' : 'bg-white border-zinc-200 text-zinc-700 shadow-sm';
@@ -1408,11 +1404,22 @@ const Transactions: React.FC<TransactionsProps> = ({ theme }) => {
       setTransactions(res.data);
     } catch (err) {
       console.warn('API error, using mock fallback', err);
-      setTransactions([
-        { transactionId: 'TX-001', transactionDate: '2026-06-10', type: 'Pendapatan', category: 'Kontrak Proyek IT', amount: 250000000, description: 'DP Proyek ERP PT Semen Nusantara', creatorEmail: 'admin@exprogio.com', status: 'Lunas' },
-        { transactionId: 'TX-003', transactionDate: '2026-06-25', type: 'Pengeluaran', category: 'Instalasi Elektrikal', amount: 60000000, description: 'Pembelian Kabel Tembaga Supreme', creatorEmail: 'staff@exprogio.com', status: 'Lunas' },
-        { transactionId: 'TX-008', transactionDate: '2026-07-02', type: 'Pengeluaran', category: 'Instalasi Elektrikal', amount: 75000000, description: 'Pengadaan Sub-Panel Listrik Proyek Gedung Sudirman', creatorEmail: 'staff@exprogio.com', status: 'Menunggu Approval' }
-      ]);
+      const savedMock = localStorage.getItem('mock_transactions');
+      if (savedMock) {
+        setTransactions(JSON.parse(savedMock));
+      } else {
+        const initialMock = [
+          { transactionId: 'TX-001', transactionDate: '2026-06-10', type: 'Pendapatan', category: 'Kontrak Proyek IT', amount: 250000000, description: 'DP Proyek ERP PT Semen Nusantara', creatorEmail: 'admin@exprogio.com', status: 'Lunas' },
+          { transactionId: 'TX-002', transactionDate: '2026-06-15', type: 'Pendapatan', category: 'Instalasi Elektrikal', amount: 180000000, description: 'Termin 1 Pemasangan Gardu Listrik Pabrik Logam Tangerang', creatorEmail: 'admin@exprogio.com', status: 'Lunas' },
+          { transactionId: 'TX-003', transactionDate: '2026-06-25', type: 'Pengeluaran', category: 'Instalasi Elektrikal', amount: 60000000, description: 'Pembelian Kabel Tembaga NYY 4x95mm Supreme', creatorEmail: 'staff@exprogio.com', status: 'Lunas' },
+          { transactionId: 'TX-004', transactionDate: '2026-06-28', type: 'Pengeluaran', category: 'Gaji & Payroll', amount: 45000000, description: 'Alokasi Penggajian Karyawan & Staff Periode Juni 2026', creatorEmail: 'admin@exprogio.com', status: 'Lunas' },
+          { transactionId: 'TX-005', transactionDate: '2026-07-01', type: 'Pendapatan', category: 'Kontrak Proyek IT', amount: 120000000, description: 'Pelunasan Invoice Proyek Cloud Infrastructure PT Telkom', creatorEmail: 'admin@exprogio.com', status: 'Lunas' },
+          { transactionId: 'TX-006', transactionDate: '2026-07-02', type: 'Pengeluaran', category: 'Operasional Kantor', amount: 8500000, description: 'Sewa Cloud Server AWS Production & Domain Perusahaan', creatorEmail: 'staff@exprogio.com', status: 'Lunas' },
+          { transactionId: 'TX-007', transactionDate: '2026-07-02', type: 'Pengeluaran', category: 'Operasional Kantor', amount: 2400000, description: 'Klaim Reimbursement Transport Pengawasan Sipil Cikarang', creatorEmail: 'staff@exprogio.com', status: 'Lunas' },
+          { transactionId: 'TX-008', transactionDate: '2026-07-02', type: 'Pengeluaran', category: 'Instalasi Elektrikal', amount: 75000000, description: 'Pengadaan Sub-Panel Listrik Proyek Gedung Sudirman Kav 24', creatorEmail: 'staff@exprogio.com', status: 'Menunggu Approval' }
+        ];
+        setTransactions(initialMock);
+      }
     } finally {
       setLoading(false);
     }
@@ -1441,7 +1448,7 @@ const Transactions: React.FC<TransactionsProps> = ({ theme }) => {
       fetchTransactions();
     } catch (err) {
       const mockNew = {
-        transactionId: 'TX-' + Math.floor(Math.random() * 100000),
+        transactionId: 'TX-' + Math.floor(Math.random() * 100000).toString().padStart(3, '0'),
         transactionDate: new Date().toISOString().split('T')[0],
         type,
         category,
@@ -1463,9 +1470,11 @@ const Transactions: React.FC<TransactionsProps> = ({ theme }) => {
       await api.post(`/transactions/${id}/approve?approve=${approve}`);
       fetchTransactions();
     } catch (err) {
-      setTransactions(transactions.map(t => 
+      const updated = transactions.map(t => 
         t.transactionId === id ? { ...t, status: approve ? 'Lunas' : 'Ditolak' } : t
-      ));
+      );
+      setTransactions(updated);
+      localStorage.setItem('mock_transactions', JSON.stringify(updated));
     }
   };
 
@@ -1475,11 +1484,13 @@ const Transactions: React.FC<TransactionsProps> = ({ theme }) => {
 
   if (loading) return <div className="text-xs text-zinc-500 font-mono">Memuat transaksi...</div>;
 
+  const showInputForm = userRole === 'admin' || userRole === 'staff' || !userRole;
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
+    <div className={`grid grid-cols-1 gap-6 animate-fade-in ${showInputForm ? 'lg:grid-cols-3' : 'lg:grid-cols-1 max-w-5xl mx-auto'}`}>
       
       {/* Transaction List Table */}
-      <div className={`lg:col-span-2 border rounded-xl p-6 space-y-6 backdrop-blur-md ${cardClass}`}>
+      <div className={`${showInputForm ? 'lg:col-span-2' : ''} border rounded-xl p-6 space-y-6 backdrop-blur-md ${cardClass}`}>
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
           <div>
             <h3 className={`font-extrabold text-xs ${titleClass}`}>Jurnal Kas Finansial</h3>
@@ -1585,6 +1596,7 @@ const Transactions: React.FC<TransactionsProps> = ({ theme }) => {
       </div>
 
       {/* Input Form Panel */}
+      {showInputForm && (
       <div className={`border rounded-xl p-6 space-y-4 h-fit backdrop-blur-md ${cardClass}`}>
         <h3 className={`font-extrabold text-xs ${titleClass}`}>Catat Transaksi</h3>
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
@@ -1626,13 +1638,14 @@ const Transactions: React.FC<TransactionsProps> = ({ theme }) => {
 
           <button type="submit" disabled={submitting} className={`w-full py-3 rounded-lg font-bold transition-all border shadow-sm ${
             isDark 
-              ? 'bg-zinc-900 border-zinc-800 text-zinc-200 hover:bg-zinc-850 hover:text-white' 
-              : 'bg-zinc-950 border-zinc-950 text-white hover:bg-zinc-900'
+              ? 'bg-white text-black border-white hover:bg-zinc-200' 
+              : 'bg-black text-white border-black hover:bg-zinc-800'
           }`}>
             {submitting ? 'Menyimpan...' : 'Simpan Transaksi'}
           </button>
         </form>
       </div>
+      )}
 
     </div>
   );
@@ -1643,15 +1656,15 @@ const Transactions: React.FC<TransactionsProps> = ({ theme }) => {
 // ==========================================
 interface PayrollProps {
   theme: ThemeMode;
+  userRole?: UserRole | null;
 }
 
-const Payroll: React.FC<PayrollProps> = ({ theme }) => {
+const Payroll: React.FC<PayrollProps> = ({ theme, userRole }) => {
   const [employees, setEmployees] = useState<any[]>([]);
   const [payrolls, setPayrolls] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [period, setPeriod] = useState('Juli 2026');
-  const userRole = localStorage.getItem('mock_user_role') || 'staff';
 
   const isDark = theme === 'dark';
   const cardClass = isDark ? 'bg-[#18181b]/50 border-zinc-800/80 text-zinc-300' : 'bg-white border-zinc-200 text-zinc-700 shadow-sm';
@@ -1667,11 +1680,18 @@ const Payroll: React.FC<PayrollProps> = ({ theme }) => {
       console.warn('API error, using mock fallback', err);
       setEmployees([
         { employeeId: 1, fullName: 'Agus Pratama', email: 'staff@exprogio.com', division: 'IT (Teknologi Informasi)', baseSalary: 8500000, allowance: 1500000, kpiTarget: 100, kpiAchieved: 95 },
-        { employeeId: 2, fullName: 'Dewi Lestari', email: 'dewi@exprogio.com', division: 'Layanan Elektrikal (MEP)', baseSalary: 7800000, allowance: 1200000, kpiTarget: 100, kpiAchieved: 88 }
+        { employeeId: 2, fullName: 'Dewi Lestari', email: 'dewi@exprogio.com', division: 'Layanan Elektrikal (MEP)', baseSalary: 7800000, allowance: 1200000, kpiTarget: 100, kpiAchieved: 88 },
+        { employeeId: 3, fullName: 'Budi Santoso', email: 'budi@exprogio.com', division: 'Pembangunan / Sipil', baseSalary: 6500000, allowance: 1000000, kpiTarget: 100, kpiAchieved: 75 }
       ]);
-      setPayrolls([
-        { payrollId: 'SL-001-1', employeeName: 'Agus Pratama', employeeEmail: 'staff@exprogio.com', division: 'IT (Teknologi Informasi)', period: 'Juni 2026', baseSalary: 8500000, allowance: 1500000, bonus: 1211250, tax: 560562.5, bpjs: 224225, netSalary: 10426462.5, releaseDate: '2026-06-28' }
-      ]);
+      const savedMock = localStorage.getItem('mock_payrolls');
+      if (savedMock) {
+        setPayrolls(JSON.parse(savedMock));
+      } else {
+        const initialMock = [
+          { payrollId: 'SL-10001', employeeName: 'Agus Pratama', employeeEmail: 'staff@exprogio.com', division: 'IT (Teknologi Informasi)', period: 'Juni 2026', baseSalary: 8500000, allowance: 1500000, bonus: 1211250, tax: 560562, bpjs: 224225, netSalary: 10426463, releaseDate: '2026-06-28' }
+        ];
+        setPayrolls(initialMock);
+      }
     } finally {
       setLoading(false);
     }
@@ -1685,36 +1705,46 @@ const Payroll: React.FC<PayrollProps> = ({ theme }) => {
     if (!period) return;
     setProcessing(true);
     try {
+      // Coba panggil endpoint process di backend
       await api.post('/payroll/process', { period });
-      alert(`Sukses memproses payroll periode ${period}!`);
+      alert(`✅ Gaji periode ${period} berhasil diproses dan tersimpan di database!`);
       fetchData();
     } catch (err: any) {
-      const mockProcessed = employees.map(emp => {
-        const base = emp.baseSalary;
-        const allowance = emp.allowance;
-        const kpiPct = emp.kpiAchieved / 100.0;
-        const bonus = base * 0.15 * kpiPct;
-        const gross = base + allowance + bonus;
-        const tax = gross * 0.05;
-        const bpjs = gross * 0.02;
-        const net = gross - tax - bpjs;
-        return {
-          payrollId: 'SL-' + Math.floor(Math.random() * 100000) + '-' + emp.employeeId,
-          employeeName: emp.fullName,
-          employeeEmail: emp.email,
-          division: emp.division,
-          period,
-          baseSalary: base,
-          allowance,
-          bonus,
-          tax,
-          bpjs,
-          netSalary: net,
-          releaseDate: new Date().toISOString().split('T')[0]
-        };
-      });
-      setPayrolls([...mockProcessed, ...payrolls]);
-      alert(`[Simulasi] Sukses memproses gaji periode ${period}!`);
+      // Jika backend belum punya endpoint process, hitung di frontend dan POST satu per satu ke database
+      try {
+        const processed = employees.map(emp => {
+          const base = emp.baseSalary;
+          const allowance = emp.allowance;
+          const kpiPct = emp.kpiAchieved / 100.0;
+          const bonus = base * 0.15 * kpiPct;
+          const gross = base + allowance + bonus;
+          const tax = gross * 0.05;
+          const bpjs = gross * 0.02;
+          const net = gross - tax - bpjs;
+          return {
+            payrollId: `SL-${emp.employeeId}-${Date.now() % 100000}`,
+            employeeEmail: emp.email,
+            employeeName: emp.fullName,
+            division: emp.division,
+            period,
+            baseSalary: base,
+            allowance,
+            bonus,
+            tax,
+            bpjs,
+            netSalary: net,
+            releaseDate: new Date().toISOString().split('T')[0]
+          };
+        });
+
+        // Simpan setiap record payroll ke database via API
+        await Promise.all(processed.map(p => api.post('/payroll', p)));
+        alert(`✅ Gaji ${processed.length} karyawan periode ${period} berhasil diproses dan tersimpan ke database!`);
+        fetchData();
+      } catch (innerErr) {
+        console.error('Gagal memproses payroll', innerErr);
+        alert('Gagal memproses payroll. Pastikan backend berjalan dan coba lagi.');
+      }
     } finally {
       setProcessing(false);
     }
@@ -1732,10 +1762,20 @@ const Payroll: React.FC<PayrollProps> = ({ theme }) => {
       {/* Header and calculation trigger panel */}
       <div className={`flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 border p-6 rounded-xl backdrop-blur-md ${cardClass}`}>
         <div>
-          <h3 className={`font-extrabold text-xs ${titleClass}`}>Pemrosesan Payroll Bulanan</h3>
-          <p className="text-xs text-zinc-400 mt-1">Lakukan kalkulasi slip gaji serentak menggunakan parameter pencapaian KPI bulanan.</p>
+          <h3 className={`font-extrabold text-xs ${titleClass}`}>
+            {userRole === 'admin' ? 'Pemrosesan Payroll Bulanan' : 'Laporan Eksekutif Payroll'}
+          </h3>
+          <p className="text-xs text-zinc-400 mt-1 mb-3">
+            {userRole === 'admin' 
+              ? 'Lakukan kalkulasi slip gaji serentak menggunakan parameter pencapaian KPI bulanan.'
+              : 'Tinjauan rekapitulasi data penggajian karyawan, capaian KPI, dan beban anggaran bulan ini.'}
+          </p>
+          <button onClick={() => window.print()} className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-[10px] uppercase tracking-wider font-bold rounded flex items-center gap-2 print:hidden">
+            <span className="material-symbols-outlined text-[14px]">print</span>
+            Cetak Rekap Gaji
+          </button>
         </div>
-        {(userRole === 'admin' || userRole === 'superadmin') && (
+        {userRole === 'admin' && (
           <div className="flex items-center gap-2 text-xs">
             <input type="text" value={period} onChange={(e) => setPeriod(e.target.value)} placeholder="Periode (ex: Juli 2026)" className={`p-2.5 border rounded-lg focus:border-emerald-500 outline-none max-w-[150px] ${isDark ? 'bg-zinc-950 border-zinc-800 text-zinc-100' : 'bg-zinc-50 border-zinc-200 text-zinc-900'}`} />
             <button onClick={handleProcessPayroll} disabled={processing} className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition-all shadow-lg">
@@ -2054,9 +2094,9 @@ const AiAssistant: React.FC<{isDark: boolean}> = ({ isDark }) => {
   ]);
 
   const questions = [
-    { q: "Analisis Arus Kas", a: "Analisis Finansial GIO AI:\n- Arus Kas Bersih saat ini positif senilai Rp 365.000.000.\n- Rasio pengeluaran terhadap pendapatan aman pada 22.4%.\n- Rekomendasi: Segera tindak lanjuti tagihan invoice PT PLN yang belum lunas (Rp 85jt)." },
+    { q: "Analisis Arus Kas", a: "Analisis Finansial GIO AI:\n- Arus Kas Bersih saat ini positif berdasarkan data jurnal transaksi PostgreSQL.\n- Pantau invoice yang belum lunas di modul Piutang (AR).\n- Rekomendasi: Segera follow up tagihan yang sudah Jatuh Tempo!" },
     { q: "Bagaimana naikkan bonus KPI?", a: "Formula Bonus Kinerja:\nBonus dihitung 15% dari Gaji Pokok dikali persentase pencapaian KPI Anda. Tingkatkan skor capaian KPI bulanan Anda mendekati 100% untuk memaksimalkan bonus!" },
-    { q: "Status Integritas Sistem", a: "Semua sistem berjalan normal:\n- DB H2: Terhubung (100%)\n- Auth Gateway: Fallback Dev-Local Sim\n- Payroll Service (Go): Terkoneksi & Siap menerima antrean batch." }
+    { q: "Status Integritas Sistem", a: "Semua sistem berjalan normal:\n- PostgreSQL: Terhubung (Port 5433 via Docker)\n- Auth Mode: MockUserFilter (pg-local)\n- Payroll Service: Siap memproses batch ke database\n- Semua data tersimpan permanen di PostgreSQL." }
   ];
 
   const handleAsk = (q: string, a: string) => {
@@ -2183,15 +2223,27 @@ const AccountsReceivable: React.FC<{ theme: ThemeMode }> = ({ theme }) => {
     return { label: `Menunggak ${diffDays} Hari (Kritis)`, color: 'text-white bg-red-600 font-black animate-pulse' };
   };
 
-  const handleReminder = (client: string) => {
-    alert(`[Simulasi] Email Surat Peringatan (SP) Penagihan telah berhasil dikirim ke: ${client}`);
+  const handleReminder = async (invoiceId: string, client: string) => {
+    try {
+      await api.post(`/invoices/${invoiceId}/reminder`);
+      alert(`✅ Email Surat Peringatan (SP) Penagihan berhasil dikirim ke klien: ${client}`);
+    } catch (err) {
+      console.error('Gagal kirim penagihan', err);
+      alert(`Gagal mengirim penagihan ke ${client}. Silakan coba lagi.`);
+    }
   };
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h2 className={`text-2xl font-black tracking-tight ${titleClass}`}>Aging Schedule &amp; Piutang (AR)</h2>
-        <p className={`text-sm mt-1 ${textClass}`}>Pemantauan umur piutang faktur (Invoice) dan penagihan klien.</p>
+      <div className="flex justify-between items-center print:hidden">
+        <div>
+          <h2 className={`text-2xl font-black tracking-tight ${titleClass}`}>Aging Schedule &amp; Piutang (AR)</h2>
+          <p className={`text-sm mt-1 ${textClass}`}>Pemantauan umur piutang faktur (Invoice) dan penagihan klien.</p>
+        </div>
+        <button onClick={() => window.print()} className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold rounded-lg shadow-md transition-all flex items-center gap-2">
+          <span className="material-symbols-outlined text-[16px]">print</span>
+          Cetak Daftar Piutang
+        </button>
       </div>
 
       <div className={`border rounded-xl p-6 ${cardClass}`}>
@@ -2226,7 +2278,7 @@ const AccountsReceivable: React.FC<{ theme: ThemeMode }> = ({ theme }) => {
                       <td className="p-3 text-center">
                         {isOverdue && (
                           <button 
-                            onClick={() => handleReminder(inv.clientName)}
+                            onClick={() => handleReminder(inv.invoiceId, inv.clientName)}
                             className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white font-bold rounded shadow-sm transition-colors text-[10px]"
                           >
                             Kirim Penagihan
@@ -2284,15 +2336,32 @@ const AccountsPayable: React.FC<{ theme: ThemeMode }> = ({ theme }) => {
     return { label: `Telat ${diffDays} Hari (Warning)`, color: 'text-red-500 bg-red-500/10 font-bold animate-pulse' };
   };
 
-  const handlePayment = (vendor: string) => {
-    alert(`[Simulasi] Dana telah berhasil ditransfer ke rekening vendor: ${vendor}. Status diubah menjadi Lunas.`);
+  const handlePayment = async (vendorInvoiceId: string, vendorName: string) => {
+    const confirm = window.confirm(`Konfirmasi pelunasan tagihan ${vendorInvoiceId} kepada ${vendorName}?`);
+    if (!confirm) return;
+    try {
+      await api.put(`/payables/${vendorInvoiceId}/pay`);
+      // Refresh data
+      const res = await api.get('/payables');
+      setPayables(res.data);
+      alert(`✅ Tagihan ${vendorInvoiceId} kepada ${vendorName} berhasil dilunasi dan tercatat di jurnal pengeluaran!`);
+    } catch (err) {
+      console.error('Gagal melunasi tagihan vendor', err);
+      alert('Gagal memproses pembayaran. Silakan coba lagi.');
+    }
   };
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h2 className={`text-2xl font-black tracking-tight ${titleClass}`}>Utang &amp; Tagihan Vendor (AP)</h2>
-        <p className={`text-sm mt-1 ${textClass}`}>Pemantauan kewajiban pembayaran material proyek dan supplier.</p>
+      <div className="flex justify-between items-center print:hidden">
+        <div>
+          <h2 className={`text-2xl font-black tracking-tight ${titleClass}`}>Utang &amp; Tagihan Vendor (AP)</h2>
+          <p className={`text-sm mt-1 ${textClass}`}>Pemantauan kewajiban pembayaran material proyek dan supplier.</p>
+        </div>
+        <button onClick={() => window.print()} className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold rounded-lg shadow-md transition-all flex items-center gap-2">
+          <span className="material-symbols-outlined text-[16px]">print</span>
+          Cetak Daftar Utang
+        </button>
       </div>
 
       <div className={`border rounded-xl p-6 ${cardClass}`}>
@@ -2327,7 +2396,7 @@ const AccountsPayable: React.FC<{ theme: ThemeMode }> = ({ theme }) => {
                       <td className="p-3 text-center">
                         {isOverdue && (
                           <button 
-                            onClick={() => handlePayment(pay.vendorName)}
+                            onClick={() => handlePayment(pay.vendorInvoiceId, pay.vendorName)}
                             className="px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded shadow-sm transition-colors text-[10px]"
                           >
                             Bayar Tagihan
@@ -2538,15 +2607,39 @@ const BudgetingDashboard: React.FC<{ theme: ThemeMode }> = ({ theme }) => {
 // ==========================================
 // 📈 PEMBUAT LAPORAN KEUANGAN (GL / LABA RUGI)
 // ==========================================
-const FinancialReportGenerator: React.FC<{ theme: ThemeMode }> = ({ theme }) => {
+const FinancialReportGenerator: React.FC<{ theme: ThemeMode, userRole?: UserRole | null }> = ({ theme, userRole }) => {
   const [report, setReport] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  // ACC status disimpan di localStorage sebagai state sementara sesi, dan dilaporkan ke audit log backend
+  const [accRequested, setAccRequested] = useState(() => localStorage.getItem('fincorp_acc_requested') === 'true');
+  const [accApproved, setAccApproved] = useState(() => localStorage.getItem('fincorp_acc_approved') === 'true');
+  const [accProcessing, setAccProcessing] = useState(false);
+
+  const handleRequestAcc = async () => {
+    setAccProcessing(true);
+    try {
+      await api.post('/audit-logs/action', { action: 'REQUEST_ACC', description: 'Admin meminta persetujuan (ACC) laporan keuangan kepada Direksi.' });
+    } catch (_) { /* simpan audit log gagal tidak blokir aksi */ }
+    setAccRequested(true);
+    localStorage.setItem('fincorp_acc_requested', 'true');
+    setAccProcessing(false);
+  };
+
+  const handleApproveAcc = async () => {
+    setAccProcessing(true);
+    try {
+      await api.post('/audit-logs/action', { action: 'APPROVE_ACC', description: 'Superadmin/Direktur menyetujui (ACC) laporan keuangan periode berjalan.' });
+    } catch (_) { /* simpan audit log gagal tidak blokir aksi */ }
+    setAccApproved(true);
+    localStorage.setItem('fincorp_acc_approved', 'true');
+    setAccProcessing(false);
+  };
 
   const isDark = theme === 'dark';
   const cardClass = isDark ? 'bg-[#0a0a0a] border-zinc-800' : 'bg-white border-zinc-200 shadow-xl';
-  const textClass = isDark ? 'text-zinc-400' : 'text-zinc-600';
-  const titleClass = isDark ? 'text-white' : 'text-zinc-900';
-  const borderClass = isDark ? 'border-zinc-800' : 'border-zinc-200';
+  const textClass = isDark ? 'text-zinc-400 print:text-black' : 'text-zinc-600 print:text-black';
+  const titleClass = isDark ? 'text-white print:text-black' : 'text-zinc-900 print:text-black';
+  const borderClass = isDark ? 'border-zinc-800 print:border-zinc-300' : 'border-zinc-200 print:border-zinc-300';
 
   useEffect(() => {
     const fetchReport = async () => {
@@ -2554,7 +2647,17 @@ const FinancialReportGenerator: React.FC<{ theme: ThemeMode }> = ({ theme }) => 
         const res = await api.get('/reports/profit-loss');
         setReport(res.data);
       } catch (err) {
-        console.warn('Gagal memuat laporan', err);
+        console.warn('API error, using fallback report', err);
+        // Fallback: hitung dari data transaksi di localStorage
+        const savedTx = localStorage.getItem('mock_transactions');
+        if (savedTx) {
+          const txList = JSON.parse(savedTx);
+          const rev = txList.filter((t: any) => t.type === 'Pendapatan').reduce((s: number, t: any) => s + t.amount, 0);
+          const exp = txList.filter((t: any) => t.type === 'Pengeluaran').reduce((s: number, t: any) => s + t.amount, 0);
+          setReport({ totalRevenue: rev, totalExpense: exp, netProfit: rev - exp, revenueByCategory: {}, expenseByCategory: {} });
+        } else {
+          setReport({ totalRevenue: 0, totalExpense: 0, netProfit: 0, revenueByCategory: {}, expenseByCategory: {} });
+        }
       } finally {
         setLoading(false);
       }
@@ -2564,89 +2667,204 @@ const FinancialReportGenerator: React.FC<{ theme: ThemeMode }> = ({ theme }) => 
 
   const formatCurrency = (val: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
+  const handleDownloadCSV = () => {
+    const csvContent = "data:text/csv;charset=utf-8,Tanggal,Deskripsi,Kategori,Jumlah\n2026-07-01,Lisensi Server AWS Q3,Beban Operasional IT,150000000\n2026-07-15,Langganan Google Workspace,Beban Operasional IT,50000000\n2026-07-28,Maintenance Data Center,Beban Operasional IT,150000000";
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "Rincian_Beban_IT_Juli2026.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
-    <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
-      <div className="flex justify-between items-center">
+    <div className="space-y-6 animate-fade-in max-w-5xl mx-auto">
+      <div className="flex justify-between items-center print:hidden">
         <div>
-          <h2 className={`text-2xl font-black tracking-tight ${titleClass}`}>Generator Laporan Keuangan</h2>
-          <p className={`text-sm mt-1 ${textClass}`}>General Ledger &amp; Laba Rugi Berjalan</p>
+          <h2 className={`text-2xl font-black tracking-tight ${titleClass}`}>Dashboard Keuangan</h2>
+          <p className={`text-sm mt-1 ${textClass}`}>Ringkasan Eksekutif & Tindak Lanjut</p>
         </div>
-        <button 
-          onClick={() => window.print()}
-          className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold rounded-lg shadow-md transition-all flex items-center gap-2"
-        >
-          <span className="material-symbols-outlined text-[16px]">print</span>
-          Cetak Dokumen
-        </button>
       </div>
 
       {loading ? (
         <p className="text-zinc-500 animate-pulse text-center py-12">Mengagregasi Data Keuangan...</p>
       ) : report ? (
-        <div className={`border p-8 rounded-xl ${cardClass} relative print:shadow-none print:border-none`}>
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 via-emerald-400 to-emerald-600"></div>
-          
-          <div className="text-center space-y-2 mb-10 border-b pb-6 border-zinc-500/20">
-            <h1 className={`text-xl font-black tracking-widest uppercase ${titleClass}`}>Laporan Laba Rugi (Profit & Loss)</h1>
-            <p className={`text-xs uppercase font-bold tracking-wider ${textClass}`}>PT EXPRO GIO NUSANTARA</p>
-            <p className={`text-[10px] ${textClass}`}>Periode Berjalan - {new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        <>
+          {/* Dashboard Summary View (Web Only) */}
+          <div className="print:hidden space-y-6">
+             {/* Cards for Revenue, Expense, Profit */}
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                 <div className={`p-5 rounded-2xl border ${cardClass} shadow-sm hover:border-emerald-500/50 transition-colors`}>
+                     <div className="flex justify-between items-start">
+                         <p className={`text-[10px] tracking-wider uppercase font-extrabold ${textClass}`}>Total Pendapatan</p>
+                         <span className="material-symbols-outlined text-emerald-500 text-lg">arrow_upward</span>
+                     </div>
+                     <p className={`text-2xl font-black text-emerald-500 mt-2`}>{formatCurrency(report.totalRevenue)}</p>
+                 </div>
+                 <div className={`p-5 rounded-2xl border ${cardClass} shadow-sm hover:border-red-500/50 transition-colors`}>
+                     <div className="flex justify-between items-start">
+                         <p className={`text-[10px] tracking-wider uppercase font-extrabold ${textClass}`}>Total Pengeluaran</p>
+                         <span className="material-symbols-outlined text-red-500 text-lg">arrow_downward</span>
+                     </div>
+                     <p className={`text-2xl font-black text-red-500 mt-2`}>{formatCurrency(report.totalExpense)}</p>
+                 </div>
+                 <div className={`p-5 rounded-2xl border ${cardClass} shadow-sm bg-gradient-to-br ${isDark ? 'from-emerald-900/20 to-transparent border-emerald-900/50' : 'from-emerald-50 to-transparent border-emerald-200'}`}>
+                     <div className="flex justify-between items-start">
+                         <p className={`text-[10px] tracking-wider uppercase font-extrabold ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>Laba Bersih</p>
+                         <span className="material-symbols-outlined text-emerald-500 text-lg">account_balance</span>
+                     </div>
+                     <p className={`text-2xl font-black ${isDark ? 'text-emerald-400' : 'text-emerald-700'} mt-2`}>{formatCurrency(report.netProfit)}</p>
+                 </div>
+             </div>
+
+             {/* Actionable List */}
+             <div className={`border rounded-2xl ${cardClass} overflow-hidden shadow-sm`}>
+                <div className={`p-4 border-b ${borderClass} flex justify-between items-center ${isDark ? 'bg-zinc-900/50' : 'bg-zinc-50'}`}>
+                   <h3 className={`text-sm font-extrabold tracking-wide uppercase ${titleClass}`}>Tindak Lanjut & Pelaporan</h3>
+                </div>
+                <div className="p-4 space-y-3">
+                   <div className={`flex flex-col md:flex-row md:items-center justify-between p-4 rounded-xl border ${borderClass} hover:bg-black/5 transition-colors gap-4`}>
+                      <div className="flex items-center gap-4">
+                         <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                            <span className="material-symbols-outlined text-xl">analytics</span>
+                         </div>
+                         <div>
+                             <p className={`font-black text-sm ${titleClass}`}>Laba Bersih Bulan Ini</p>
+                             <p className={`text-xs mt-1 font-medium ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                                 {formatCurrency(report.netProfit)} <span className="text-zinc-400 mx-1">•</span> 
+                                 {userRole === 'superadmin' || userRole === 'manager' 
+                                   ? (accApproved ? 'Disetujui oleh Direksi' : 'Menunggu Persetujuan Anda') 
+                                   : (accApproved ? 'Disetujui oleh Direksi' : (accRequested ? 'Menunggu Persetujuan Direksi' : 'Membutuhkan ACC Direksi'))}
+                             </p>
+                         </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                         {userRole === 'superadmin' || userRole === 'manager' ? (
+                             accApproved ? (
+                                 <button disabled className="px-4 py-2 bg-zinc-800 text-emerald-400 text-xs font-bold rounded-lg shadow-inner flex items-center gap-2 cursor-not-allowed">
+                                     <span className="material-symbols-outlined text-[16px]">task_alt</span> Laporan Disetujui
+                                 </button>
+                             ) : (
+                                 <button 
+                                     onClick={handleApproveAcc}
+                                     disabled={accProcessing}
+                                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-bold rounded-lg shadow transition-all flex items-center gap-2">
+                                     <span className="material-symbols-outlined text-[16px]">{accProcessing ? 'hourglass_top' : 'thumb_up'}</span> {accProcessing ? 'Memproses...' : 'Setujui (ACC) Laporan'}
+                                 </button>
+                             )
+                         ) : (
+                             accApproved ? (
+                                 <button disabled className="px-4 py-2 bg-zinc-800 text-emerald-400 text-xs font-bold rounded-lg shadow-inner flex items-center gap-2 cursor-not-allowed">
+                                     <span className="material-symbols-outlined text-[16px]">task_alt</span> Laporan Disetujui
+                                 </button>
+                             ) : accRequested ? (
+                                 <button disabled className="px-4 py-2 bg-zinc-800 text-emerald-400 text-xs font-bold rounded-lg shadow-inner flex items-center gap-2 cursor-not-allowed">
+                                     <span className="material-symbols-outlined text-[16px] animate-pulse">pending</span> Menunggu ACC...
+                                 </button>
+                             ) : (
+                                 <button 
+                                     onClick={handleRequestAcc}
+                                     disabled={accProcessing}
+                                     className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-bold rounded-lg shadow transition-all flex items-center gap-2">
+                                     <span className="material-symbols-outlined text-[16px]">{accProcessing ? 'hourglass_top' : 'verified'}</span> {accProcessing ? 'Memproses...' : 'Tindak Lanjuti ACC'}
+                                 </button>
+                             )
+                         )}
+                         <button onClick={() => window.print()} className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold rounded-lg shadow transition-all flex items-center gap-2">
+                             <span className="material-symbols-outlined text-[16px]">print</span> Cetak Dokumen
+                         </button>
+                      </div>
+                   </div>
+                   
+                   <div className={`flex flex-col md:flex-row md:items-center justify-between p-4 rounded-xl border ${borderClass} hover:bg-black/5 transition-colors gap-4`}>
+                      <div className="flex items-center gap-4">
+                         <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                            <span className="material-symbols-outlined text-xl">receipt_long</span>
+                         </div>
+                         <div>
+                             <p className={`font-black text-sm ${titleClass}`}>Laporan Arus Kas Keluar</p>
+                             <p className={`text-xs mt-1 font-medium ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                                 Beban Operasional IT <span className="text-zinc-400 mx-1">•</span> {formatCurrency(350000000)}
+                             </p>
+                         </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                         <button 
+                             onClick={handleDownloadCSV}
+                             className={`px-4 py-2 border ${borderClass} hover:bg-emerald-600 hover:text-white hover:border-emerald-600 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${titleClass}`}>
+                             <span className="material-symbols-outlined text-[16px]">download</span> Unduh Rincian (CSV)
+                         </button>
+                      </div>
+                   </div>
+                </div>
+             </div>
           </div>
 
-          <div className="space-y-8">
-            {/* PENDAPATAN */}
-            <div>
-              <h3 className={`text-sm font-extrabold uppercase border-b ${borderClass} pb-2 mb-3 ${titleClass}`}>A. Pendapatan (Revenue)</h3>
-              <div className="space-y-2 pl-4">
-                {Object.entries(report.revenueByCategory).map(([cat, val]: any) => (
-                  <div key={cat} className="flex justify-between text-xs">
-                    <span className={textClass}>{cat}</span>
-                    <span className={`font-medium ${titleClass}`}>{formatCurrency(val)}</span>
-                  </div>
-                ))}
+          {/* Printable Document View (Hidden on Web, visible on Print) */}
+          <div className="hidden print:block print:p-0 print:m-0 print:bg-white print:text-black">
+              {/* Kop Surat / Header */}
+              <div className="text-center space-y-2 mb-10 border-b pb-6 border-black">
+                <h1 className="text-xl font-black tracking-widest uppercase">Laporan Laba Rugi (Profit & Loss)</h1>
+                <p className="text-xs uppercase font-bold tracking-wider">PT EXPRO GIO NUSANTARA</p>
+                <p className="text-[10px]">Periode Berjalan - {new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
               </div>
-              <div className={`flex justify-between text-xs font-black border-t mt-3 pt-2 ${borderClass} ${titleClass}`}>
-                <span>Total Pendapatan</span>
-                <span className="text-emerald-500">{formatCurrency(report.totalRevenue)}</span>
-              </div>
-            </div>
 
-            {/* PENGELUARAN */}
-            <div>
-              <h3 className={`text-sm font-extrabold uppercase border-b ${borderClass} pb-2 mb-3 ${titleClass}`}>B. Beban / Pengeluaran (Expenses)</h3>
-              <div className="space-y-2 pl-4">
-                {Object.entries(report.expenseByCategory).map(([cat, val]: any) => (
-                  <div key={cat} className="flex justify-between text-xs">
-                    <span className={textClass}>{cat}</span>
-                    <span className={`font-medium ${titleClass}`}>{formatCurrency(val)}</span>
-                  </div>
-                ))}
+              {/* PENDAPATAN */}
+              <div className="mb-8">
+                <h3 className="text-sm font-extrabold uppercase border-b border-black pb-2 mb-3">A. Pendapatan (Revenue)</h3>
+                <div className="space-y-2 pl-4">
+                  {Object.entries(report.revenueByCategory).map(([cat, val]: any) => (
+                    <div key={cat} className="flex justify-between text-xs">
+                      <span>{cat}</span>
+                      <span className="font-medium">{formatCurrency(val)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-between text-xs font-black border-t mt-3 pt-2 border-black">
+                  <span>Total Pendapatan</span>
+                  <span className="text-black">{formatCurrency(report.totalRevenue)}</span>
+                </div>
               </div>
-              <div className={`flex justify-between text-xs font-black border-t mt-3 pt-2 ${borderClass} ${titleClass}`}>
-                <span>Total Beban Pokok &amp; Operasional</span>
-                <span className="text-red-500">({formatCurrency(report.totalExpense)})</span>
-              </div>
-            </div>
 
-            {/* LABA BERSIH */}
-            <div className={`flex justify-between items-center text-sm font-black border-t-2 mt-6 pt-4 ${isDark ? 'border-emerald-900/50' : 'border-zinc-300'} ${titleClass}`}>
-              <span className="uppercase tracking-wider">Laba / (Rugi) Bersih</span>
-              <span className={`text-xl ${report.netProfit >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                {formatCurrency(report.netProfit)}
-              </span>
-            </div>
+              {/* PENGELUARAN */}
+              <div className="mb-8">
+                <h3 className="text-sm font-extrabold uppercase border-b border-black pb-2 mb-3">B. Beban / Pengeluaran (Expenses)</h3>
+                <div className="space-y-2 pl-4">
+                  {Object.entries(report.expenseByCategory).map(([cat, val]: any) => (
+                    <div key={cat} className="flex justify-between text-xs">
+                      <span>{cat}</span>
+                      <span className="font-medium">{formatCurrency(val)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-between text-xs font-black border-t mt-3 pt-2 border-black">
+                  <span>Total Beban Pokok &amp; Operasional</span>
+                  <span className="text-black">({formatCurrency(report.totalExpense)})</span>
+                </div>
+              </div>
+
+              {/* LABA BERSIH */}
+              <div className="flex justify-between items-center text-sm font-black border-t-2 mt-6 pt-4 border-black">
+                <span className="uppercase tracking-wider">Laba / (Rugi) Bersih</span>
+                <span className="text-xl">
+                  {formatCurrency(report.netProfit)}
+                </span>
+              </div>
+              
+              {/* Tanda Tangan */}
+              <div className="mt-16 pt-8 border-t border-dashed border-black flex justify-between text-[10px] uppercase tracking-widest text-center">
+                <div>
+                  <p className="mb-12">Disiapkan Oleh</p>
+                  <p className="font-bold border-t border-black pt-2 inline-block px-4">Finance Controller</p>
+                </div>
+                <div>
+                  <p className="mb-12">Disetujui Oleh</p>
+                  <p className="font-bold border-t border-black pt-2 inline-block px-4">Direktur Utama</p>
+                </div>
+              </div>
           </div>
-          
-          <div className="mt-16 pt-8 border-t border-dashed border-zinc-500/30 flex justify-between text-[9px] text-zinc-500 uppercase tracking-widest text-center">
-            <div>
-              <p className="mb-8">Disiapkan Oleh</p>
-              <p className={`font-bold border-t ${borderClass} pt-2 inline-block px-4`}>Finance Controller</p>
-            </div>
-            <div>
-              <p className="mb-8">Disetujui Oleh</p>
-              <p className={`font-bold border-t ${borderClass} pt-2 inline-block px-4`}>Direktur Utama</p>
-            </div>
-          </div>
-        </div>
+        </>
       ) : null}
     </div>
   );
@@ -2722,11 +2940,12 @@ const App: React.FC = () => {
   }, []);
 
   const handleMockLogin = (role: UserRole, name: string) => {
-    const emailMap = {
+    const emailMap: Record<UserRole, string> = {
       superadmin: 'superadmin@exprogio.com',
       admin: 'admin@exprogio.com',
       manager: 'manager@exprogio.com',
-      staff: 'staff@exprogio.com'
+      staff: 'staff@exprogio.com',
+      investor: 'investor@exprogio.com'
     };
     localStorage.setItem('mock_user_email', emailMap[role]);
     localStorage.setItem('mock_user_role', role);
@@ -2800,12 +3019,11 @@ const App: React.FC = () => {
       <div className={`flex min-h-screen ${layoutBg} ${isDark ? 'text-zinc-100' : 'text-zinc-800'} font-sans antialiased transition-colors duration-300`}>
         
         {/* Sidebar Navigation */}
-        <aside className={`w-64 ${sidebarBg} flex flex-col justify-between p-6 shrink-0 shadow-2xl border-r ${sidebarBorder} transition-colors`}>
+        <aside className={`w-64 ${sidebarBg} flex flex-col justify-between p-6 shrink-0 shadow-2xl border-r ${sidebarBorder} transition-colors print:hidden`}>
           <div className="space-y-6">
             <div className="flex items-center gap-3 border-b border-zinc-800 pb-4">
-              <div className="w-7 h-7 rounded bg-gradient-to-tr from-emerald-500 to-emerald-700 flex items-center justify-center font-bold text-white text-xs">E</div>
-              <div>
-                <h1 className={`font-black text-xs tracking-wider uppercase leading-none ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>PT EXPRO GIO</h1>
+              <img src="/logo.png" alt="PT EXPRO GIO NUSANTARA Logo" className="h-10 w-auto object-contain" />
+              <div className="hidden md:block">
                 <span className="text-[8px] text-emerald-600 tracking-widest font-bold uppercase mt-1 block">FINCORP SUITE</span>
               </div>
             </div>
@@ -2838,30 +3056,45 @@ const App: React.FC = () => {
                     <span className="material-symbols-outlined text-base">receipt_long</span> Jurnal Transaksi
                   </Link>
                   
-                  {(userRole === 'superadmin' || userRole === 'admin') && (
-                    <>
+                  {['superadmin', 'admin', 'manager'].includes(userRole!) && (
                       <Link to="/payroll" className={getLinkClass('/payroll')}>
                         <span className="material-symbols-outlined text-base">payments</span> Payroll Karyawan
                       </Link>
-                      <Link to="/user-approvals" className={getLinkClass('/user-approvals')}>
-                        <span className="material-symbols-outlined text-base">manage_accounts</span> Persetujuan User
-                      </Link>
+                  )}
+                  
+                  {userRole === 'superadmin' && (
+                    <Link to="/user-approvals" className={getLinkClass('/user-approvals')}>
+                      <span className="material-symbols-outlined text-base">manage_accounts</span> Persetujuan User
+                    </Link>
+                  )}
+
+                  {['superadmin', 'manager'].includes(userRole!) && (
                       <Link to="/budgets" className={getLinkClass('/budgets')}>
                         <span className="material-symbols-outlined text-base">account_balance_wallet</span> Manajemen Anggaran
                       </Link>
+                  )}
+
+                  {['superadmin', 'admin', 'manager'].includes(userRole!) && (
                       <Link to="/reports" className={getLinkClass('/reports')}>
                         <span className="material-symbols-outlined text-base">query_stats</span> Laporan Keuangan
                       </Link>
+                  )}
+
+                  {['superadmin', 'admin', 'staff'].includes(userRole!) && (
+                      <>
                       <Link to="/receivables" className={getLinkClass('/receivables')}>
                         <span className="material-symbols-outlined text-base">request_quote</span> Manajemen Piutang
                       </Link>
                       <Link to="/payables" className={getLinkClass('/payables')}>
                         <span className="material-symbols-outlined text-base">local_shipping</span> Manajemen Utang (AP)
                       </Link>
+                      </>
+                  )}
+
+                  {['superadmin', 'admin', 'manager'].includes(userRole!) && (
                       <Link to="/taxes" className={getLinkClass('/taxes')}>
                         <span className="material-symbols-outlined text-base">account_balance</span> Kalkulator Pajak
                       </Link>
-                    </>
                   )}
                   
                   {userRole === 'superadmin' && (
@@ -2894,9 +3127,19 @@ const App: React.FC = () => {
         </aside>
 
         {/* Content Panel with Live System Status Indicators & AI Chatbot */}
-        <main className="flex-grow p-8 overflow-y-auto max-w-7xl mx-auto w-full flex flex-col space-y-6">
+        <main className="flex-grow p-8 overflow-y-auto max-w-7xl mx-auto w-full flex flex-col space-y-6 print:p-0 print:m-0 print:block">
+          {/* Universal Print Letterhead */}
+          <div className="hidden print:flex items-center justify-between border-b-2 border-emerald-700 pb-6 mb-8 w-full">
+            <img src="/logo.png" alt="Logo PT Expro Gio Nusantara" className="h-16 w-auto object-contain" />
+            <div className="text-right text-black">
+              <h1 className="text-xl font-black uppercase tracking-widest text-emerald-800">PT Expro Gio Nusantara</h1>
+              <p className="text-xs font-bold">FinCorp Enterprise Suite - Industry 5.0 Workspace</p>
+              <p className="text-xs">Gedung Expro Tower Lt. 12, Jakarta Selatan, 12920</p>
+            </div>
+          </div>
+
           {/* Corporate Intelligence Ticker */}
-          <div className={`flex items-center gap-3 p-2 px-4 rounded-lg border text-[9px] font-mono shadow-sm overflow-hidden whitespace-nowrap ${
+          <div className={`flex items-center gap-3 p-2 px-4 rounded-lg border text-[9px] font-mono shadow-sm overflow-hidden whitespace-nowrap print:hidden ${
             isDark ? 'bg-[#0a0a0c] border-[#1b2b24] text-zinc-400' : 'bg-white border-[#d8eae0] text-zinc-600'
           }`}>
             <span className={`flex items-center gap-1 font-bold ${isDark ? 'text-emerald-500' : 'text-emerald-700'}`}>
@@ -2916,7 +3159,7 @@ const App: React.FC = () => {
           </div>
 
           {/* Top Bar Header */}
-          <div className={`flex flex-col md:flex-row md:justify-between md:items-center border-b pb-4 gap-4 ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`}>
+          <div className={`flex flex-col md:flex-row md:justify-between md:items-center border-b pb-4 gap-4 print:hidden ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`}>
             <div>
               <h2 className="text-xs font-black text-zinc-500 uppercase tracking-widest leading-none">PT Expro Gio Nusantara</h2>
               <span className={`text-[10px] mt-1 block ${isDark ? 'text-zinc-400' : 'text-zinc-650'}`}>FinCorp Enterprise Suite - Industry 5.0 Workspace</span>
@@ -2963,21 +3206,23 @@ const App: React.FC = () => {
         } />
         
         <Route path="/transactions" element={
-          <LayoutWrapper>
-            <Transactions theme={theme} />
-          </LayoutWrapper>
+          <GuardedRoute allowedRoles={['superadmin', 'admin', 'manager', 'staff']}>
+            <LayoutWrapper>
+              <Transactions theme={theme} userRole={userRole} />
+            </LayoutWrapper>
+          </GuardedRoute>
         } />
         
         <Route path="/payroll" element={
-          <GuardedRoute allowedRoles={['superadmin', 'admin']}>
+          <GuardedRoute allowedRoles={['superadmin', 'admin', 'manager']}>
             <LayoutWrapper>
-              <Payroll theme={theme} />
+              <Payroll theme={theme} userRole={userRole} />
             </LayoutWrapper>
           </GuardedRoute>
         } />
         
         <Route path="/user-approvals" element={
-          <GuardedRoute allowedRoles={['superadmin', 'admin']}>
+          <GuardedRoute allowedRoles={['superadmin']}>
             <LayoutWrapper>
               <UserApprovals theme={theme} />
             </LayoutWrapper>
@@ -2994,7 +3239,7 @@ const App: React.FC = () => {
 
         <Route path="/403" element={<AccessDenied />} />
         <Route path="/budgets" element={
-          <GuardedRoute allowedRoles={['superadmin', 'admin']}>
+          <GuardedRoute allowedRoles={['superadmin', 'manager']}>
             <LayoutWrapper>
               <BudgetingDashboard theme={theme} />
             </LayoutWrapper>
@@ -3002,15 +3247,15 @@ const App: React.FC = () => {
         } />
         
         <Route path="/reports" element={
-          <GuardedRoute allowedRoles={['superadmin', 'admin']}>
+          <GuardedRoute allowedRoles={['superadmin', 'admin', 'manager']}>
             <LayoutWrapper>
-              <FinancialReportGenerator theme={theme} />
+              <FinancialReportGenerator theme={theme} userRole={userRole} />
             </LayoutWrapper>
           </GuardedRoute>
         } />
         
         <Route path="/receivables" element={
-          <GuardedRoute allowedRoles={['superadmin', 'admin']}>
+          <GuardedRoute allowedRoles={['superadmin', 'admin', 'staff']}>
             <LayoutWrapper>
               <AccountsReceivable theme={theme} />
             </LayoutWrapper>
@@ -3018,7 +3263,7 @@ const App: React.FC = () => {
         } />
         
         <Route path="/payables" element={
-          <GuardedRoute allowedRoles={['superadmin', 'admin']}>
+          <GuardedRoute allowedRoles={['superadmin', 'admin', 'staff']}>
             <LayoutWrapper>
               <AccountsPayable theme={theme} />
             </LayoutWrapper>
@@ -3026,7 +3271,7 @@ const App: React.FC = () => {
         } />
         
         <Route path="/taxes" element={
-          <GuardedRoute allowedRoles={['superadmin', 'admin']}>
+          <GuardedRoute allowedRoles={['superadmin', 'admin', 'manager']}>
             <LayoutWrapper>
               <TaxDashboard theme={theme} />
             </LayoutWrapper>
@@ -3035,6 +3280,7 @@ const App: React.FC = () => {
 
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
+      <AIAssistantUI />
     </Router>
   );
 };

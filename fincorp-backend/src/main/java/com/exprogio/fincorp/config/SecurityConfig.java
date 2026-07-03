@@ -23,7 +23,7 @@ import org.springframework.context.annotation.Profile;
 
 @Configuration
 @EnableWebSecurity
-@Profile("!dev-local")
+@Profile("!dev-local & !pg-local")
 public class SecurityConfig {
 
     @Bean
@@ -34,39 +34,39 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 // Public endpoint
-                .requestMatchers("/api/public/**").permitAll()
+                .requestMatchers("/public/**").permitAll()
                 
                 // 1. Dashboard Module
-                .requestMatchers(HttpMethod.GET, "/api/dashboard/**").hasAnyRole("superadmin", "admin", "manager", "staff")
+                .requestMatchers(HttpMethod.GET, "/dashboard/**").hasAnyRole("superadmin", "admin", "manager", "staff")
                 
                 // 2. Pendapatan & Pengeluaran Module (Transactions)
-                .requestMatchers(HttpMethod.GET, "/api/transactions/**").hasAnyRole("superadmin", "admin", "manager", "staff")
-                .requestMatchers(HttpMethod.POST, "/api/transactions").hasAnyRole("superadmin", "admin", "staff")
+                .requestMatchers(HttpMethod.GET, "/transactions/**").hasAnyRole("superadmin", "admin", "manager", "staff")
+                .requestMatchers(HttpMethod.POST, "/transactions").hasAnyRole("superadmin", "admin", "staff")
                 
                 // 3. Approvals Module
-                .requestMatchers(HttpMethod.POST, "/api/transactions/*/approve").hasAnyRole("superadmin", "manager")
+                .requestMatchers(HttpMethod.POST, "/transactions/*/approve").hasAnyRole("superadmin", "manager")
                 
                 // 4. Invoicing Module
-                .requestMatchers(HttpMethod.GET, "/api/invoices/**").hasAnyRole("superadmin", "admin", "manager", "staff")
-                .requestMatchers(HttpMethod.POST, "/api/invoices").hasAnyRole("superadmin", "admin", "staff")
-                .requestMatchers(HttpMethod.PUT, "/api/invoices/*/pay").hasAnyRole("superadmin", "admin", "manager")
-                .requestMatchers(HttpMethod.POST, "/api/invoices/*/reminder").hasAnyRole("superadmin", "admin", "staff")
+                .requestMatchers(HttpMethod.GET, "/invoices/**").hasAnyRole("superadmin", "admin", "manager", "staff")
+                .requestMatchers(HttpMethod.POST, "/invoices").hasAnyRole("superadmin", "admin", "staff")
+                .requestMatchers(HttpMethod.PUT, "/invoices/*/pay").hasAnyRole("superadmin", "admin", "manager")
+                .requestMatchers(HttpMethod.POST, "/invoices/*/reminder").hasAnyRole("superadmin", "admin", "staff")
                 
                 // 5. Payroll Module
-                .requestMatchers(HttpMethod.GET, "/api/payroll/my").hasRole("staff") // own slip
-                .requestMatchers(HttpMethod.GET, "/api/payroll/**").hasAnyRole("superadmin", "admin", "manager")
-                .requestMatchers(HttpMethod.POST, "/api/payroll/process").hasAnyRole("superadmin", "admin")
-                .requestMatchers(HttpMethod.PUT, "/api/payroll/*/approve").hasAnyRole("superadmin", "manager")
+                .requestMatchers(HttpMethod.GET, "/payroll/my").hasRole("staff") // own slip
+                .requestMatchers(HttpMethod.GET, "/payroll/**").hasAnyRole("superadmin", "admin", "manager")
+                .requestMatchers(HttpMethod.POST, "/payroll/process").hasAnyRole("superadmin", "admin")
+                .requestMatchers(HttpMethod.PUT, "/payroll/*/approve").hasAnyRole("superadmin", "manager")
                 
                 // 6. Laporan Keuangan Module
-                .requestMatchers(HttpMethod.GET, "/api/reports/**").hasAnyRole("superadmin", "admin", "manager")
+                .requestMatchers(HttpMethod.GET, "/reports/**").hasAnyRole("superadmin", "admin", "manager")
                 
                 // 7. Manajemen User & Role
-                .requestMatchers("/api/user-approvals/**").hasAnyRole("superadmin", "admin")
+                .requestMatchers("/user-approvals/**").hasAnyRole("superadmin", "admin")
                 
                 // 8. Audit Log Module
-                .requestMatchers(HttpMethod.GET, "/api/audit-logs/**").hasAnyRole("superadmin", "admin", "manager")
-                .requestMatchers(HttpMethod.DELETE, "/api/audit-logs").hasRole("superadmin")
+                .requestMatchers(HttpMethod.GET, "/audit-logs/**").hasAnyRole("superadmin", "admin", "manager")
+                .requestMatchers(HttpMethod.DELETE, "/audit-logs").hasRole("superadmin")
                 
                 // Catch-all
                 .anyRequest().authenticated()
@@ -85,7 +85,6 @@ public class SecurityConfig {
         return converter;
     }
 
-    @Bean
     public Converter<Jwt, Collection<GrantedAuthority>> jwtGrantedAuthoritiesConverter() {
         return jwt -> {
             Map<String, Object> realmAccess = jwt.getClaim("realm_access");

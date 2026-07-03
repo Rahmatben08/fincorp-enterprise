@@ -1,5 +1,5 @@
 # PT Expro Gio Nusantara - Auto Maven Downloader & Spring Boot Launcher
-# Plain ASCII version to prevent Windows PowerShell encoding issues
+# Connected to PostgreSQL Docker Database
 
 $MavenVersion = "3.9.6"
 $MavenDir = "$PSScriptRoot\.maven"
@@ -11,10 +11,8 @@ $MvnPath = "$MavenDir\apache-maven-$MavenVersion\bin\mvn.cmd"
 if (!(Test-Path $MvnPath)) {
     Write-Host "Maven not detected locally. Downloading Apache Maven $MavenVersion..."
     
-    # Bypass SSL verification
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     
-    # Download zip file
     try {
         Invoke-WebRequest -Uri $MavenUrl -OutFile $MavenZip -ErrorAction Stop
     } catch {
@@ -23,7 +21,6 @@ if (!(Test-Path $MvnPath)) {
         exit 1
     }
     
-    # Extract zip file
     if (Test-Path $MavenZip) {
         Write-Host "Extracting Maven to project directory..."
         try {
@@ -41,10 +38,21 @@ if (!(Test-Path $MvnPath)) {
     }
 }
 
-# 2. Run Spring Boot Backend
-Write-Host "Running Java Spring Boot Backend (Port: 8081)..."
-Write-Host "Database: H2 In-Memory Database (Active)"
-Write-Host "Profile: dev-local (Keycloak SSO Simulated)"
+# 2. Run Spring Boot Backend connected to PostgreSQL
+Write-Host "=========================================="
+Write-Host " PT Expro Gio Nusantara - FinCorp Backend"
+Write-Host "=========================================="
+Write-Host "Backend Port   : 8081"
+Write-Host "Database       : PostgreSQL (Docker - port 5433)"
+Write-Host "Auth Mode      : Mock SSO (X-User-Email / X-User-Role headers)"
+Write-Host "=========================================="
+
+# Set environment variables to connect to PostgreSQL instead of H2
+$env:SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5433/fincorp_enterprise_db"
+$env:SPRING_DATASOURCE_USERNAME = "fincorp_admin"
+$env:SPRING_DATASOURCE_PASSWORD = "SecretPassword123"
+# Override profile to NOT use dev-local H2, but also load LocalSecurityConfig trick
+$env:SPRING_PROFILES_ACTIVE = "pg-local"
 
 if (Test-Path $MvnPath) {
     Set-Location "$PSScriptRoot\fincorp-backend"

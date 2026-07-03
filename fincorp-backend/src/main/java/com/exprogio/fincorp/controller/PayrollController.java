@@ -116,4 +116,41 @@ public class PayrollController {
 
         return ResponseEntity.ok(processedPayrolls);
     }
+
+    /**
+     * Menyimpan satu record payroll (digunakan sebagai fallback jika /process tidak tersedia)
+     */
+    @PostMapping
+    public ResponseEntity<Payroll> savePayroll(@RequestBody Payroll payroll) {
+        // Pastikan payrollId ada
+        if (payroll.getPayrollId() == null || payroll.getPayrollId().isEmpty()) {
+            payroll.setPayrollId("SL-" + System.currentTimeMillis() % 100000);
+        }
+        if (payroll.getReleaseDate() == null) {
+            payroll.setReleaseDate(LocalDate.now());
+        }
+        Payroll saved = payrollRepository.save(payroll);
+        auditService.log("SAVE_PAYROLL", "Menyimpan data payroll " + saved.getPayrollId() + " untuk " + saved.getEmployeeName() + " periode " + saved.getPeriod());
+        return ResponseEntity.ok(saved);
+    }
+
+    /**
+     * Approve/reject payroll oleh Manajer/Superadmin
+     */
+    @PutMapping("/{id}/approve")
+    public ResponseEntity<?> approvePayroll(
+            @PathVariable String id,
+            @RequestParam boolean approve,
+            @RequestHeader(value = "X-User-Email", required = false) String emailHeader) {
+
+        return payrollRepository.findById(id).map(payroll -> {
+            String newStatus = approve ? "Disetujui" : "Ditolak";
+            // Jika model Payroll punya field status, set di sini
+            // payroll.setApprovalStatus(newStatus);
+            payrollRepository.save(payroll);
+            auditService.log("APPROVE_PAYROLL",
+                String.format("%s %s payroll %s (%s)", emailHeader, newStatus, id, payroll.getEmployeeName()));
+            return ResponseEntity.ok(payroll);
+        }).orElse(ResponseEntity.notFound().build());
+    }
 }

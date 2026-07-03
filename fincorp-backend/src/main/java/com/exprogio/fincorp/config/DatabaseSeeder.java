@@ -23,7 +23,10 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
+import org.springframework.context.annotation.Profile;
+
 @Component
+@Profile({"dev-local", "pg-local"})
 public class DatabaseSeeder implements CommandLineRunner {
 
     @Autowired

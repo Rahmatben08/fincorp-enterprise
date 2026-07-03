@@ -24,21 +24,38 @@ public class AuditService {
 
     @Transactional
     public void log(String action, String description) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String email = "Anonymous";
         String role = "guest";
 
-        if (auth != null && auth.getPrincipal() instanceof Jwt) {
-            Jwt jwt = (Jwt) auth.getPrincipal();
-            email = jwt.getClaim("preferred_username") != null ? jwt.getClaim("preferred_username") : jwt.getSubject();
-            
-            Map<String, Object> realmAccess = jwt.getClaim("realm_access");
-            if (realmAccess != null && realmAccess.containsKey("roles")) {
-                @SuppressWarnings("unchecked")
-                List<String> roles = (List<String>) realmAccess.get("roles");
-                // Get highest role
-                role = roles.stream()
-                        .filter(r -> r.equals("superadmin") || r.equals("admin") || r.equals("manager") || r.equals("staff"))
+        // 1. Coba baca dari header mock (profil pg-local / dev-local)
+        String mockEmail = request.getHeader("X-User-Email");
+        String mockRole = request.getHeader("X-User-Role");
+        if (mockEmail != null && !mockEmail.isEmpty()) {
+            email = mockEmail;
+            role = (mockRole != null) ? mockRole : "staff";
+        } else {
+            // 2. Fallback: baca dari JWT token (profil production dengan Keycloak)
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.getPrincipal() instanceof Jwt) {
+                Jwt jwt = (Jwt) auth.getPrincipal();
+                email = jwt.getClaim("preferred_username") != null
+                        ? jwt.getClaim("preferred_username")
+                        : jwt.getSubject();
+
+                Map<String, Object> realmAccess = jwt.getClaim("realm_access");
+                if (realmAccess != null && realmAccess.containsKey("roles")) {
+                    @SuppressWarnings("unchecked")
+                    List<String> roles = (List<String>) realmAccess.get("roles");
+                    role = roles.stream()
+                            .filter(r -> r.equals("superadmin") || r.equals("admin") || r.equals("manager") || r.equals("staff"))
+                            .findFirst()
+                            .orElse("guest");
+                }
+            } else if (auth != null) {
+                // MockUserFilter mengeset authentication.getName() sebagai email
+                email = auth.getName();
+                role = auth.getAuthorities().stream()
+                        .map(a -> a.getAuthority().replace("ROLE_", "").toLowerCase())
                         .findFirst()
                         .orElse("guest");
             }

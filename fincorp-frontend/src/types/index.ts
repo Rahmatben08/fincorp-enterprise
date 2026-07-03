@@ -1,7 +1,7 @@
 // TypeScript Type Interfaces - FinCorp Enterprise (PT Expro Gio Nusantara)
 // Mapped directly to the 9 Database Entities in the SQL DDL
 
-export type UserRole = 'superadmin' | 'admin' | 'manager' | 'staff';
+export type UserRole = 'superadmin' | 'admin' | 'manager' | 'staff' | 'investor';
 
 export interface User {
   userId?: number;
