@@ -18,6 +18,57 @@ declare global {
 export type ThemeMode = 'light' | 'dark';
 
 // ==========================================
+// 🍞 TOAST NOTIFICATION CONTEXT
+// ==========================================
+export type ToastType = 'success' | 'error' | 'info';
+interface ToastContextType { showToast: (msg: string, type?: ToastType) => void; }
+const ToastContext = React.createContext<ToastContextType>({ showToast: () => {} });
+export const useToast = () => React.useContext(ToastContext);
+
+export const ToastProvider: React.FC<{children: React.ReactNode, isDark: boolean}> = ({children, isDark}) => {
+  const [toast, setToast] = useState<{msg: string, type: ToastType, visible: boolean, id: number}>({msg: '', type: 'info', visible: false, id: 0});
+
+  const showToast = React.useCallback((msg: string, type: ToastType = 'info') => {
+    const newId = Date.now();
+    setToast({ msg, type, visible: true, id: newId });
+    setTimeout(() => {
+      setToast(prev => prev.id === newId ? {...prev, visible: false} : prev);
+    }, 4000);
+  }, []);
+
+  return (
+    <ToastContext.Provider value={{ showToast }}>
+      {children}
+      <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3 rounded-xl shadow-2xl transition-all duration-300 border ${
+        toast.visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'
+      } ${
+        toast.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
+        toast.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' :
+        isDark ? 'bg-zinc-800 text-white border-zinc-700' : 'bg-white text-zinc-800 border-zinc-200'
+      }`}>
+        <span className="material-symbols-outlined text-lg">
+          {toast.type === 'success' ? 'check_circle' : toast.type === 'error' ? 'error' : 'info'}
+        </span>
+        <p className="text-sm font-bold">{toast.msg}</p>
+      </div>
+    </ToastContext.Provider>
+  );
+};
+
+// ==========================================
+// ⏳ SKELETON LOADER
+// ==========================================
+export const SkeletonLoader: React.FC<{ rows?: number, isDark?: boolean }> = ({ rows = 4, isDark = true }) => {
+  return (
+    <div className="space-y-4 w-full animate-pulse p-4">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className={`h-10 w-full rounded-md ${isDark ? 'bg-zinc-800/50' : 'bg-zinc-200'}`}></div>
+      ))}
+    </div>
+  );
+};
+
+// ==========================================
 // 📊 EXPORT & PRINT HELPERS
 // ==========================================
 const exportToExcel = (data: any[], filename: string, headersMap: { [key: string]: string }) => {
@@ -247,6 +298,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ theme, setTheme }) => {
   const [division, setDivision] = useState('IT (Teknologi Informasi)');
   const [regSuccess, setRegSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const { showToast } = useToast();
 
   const isDark = theme === 'dark';
   const bgClass = isDark ? 'bg-[#070708] text-zinc-100' : 'bg-zinc-50 text-zinc-800';
@@ -260,11 +312,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ theme, setTheme }) => {
     setSubmitting(true);
     try {
       await api.post('/user-approvals/register', { email, fullName, division, status: 'Pending' });
-      setRegSuccess(true);
+      showToast('Registrasi berhasil. Menunggu approval admin.', 'success');
       setFullName('');
       setEmail('');
+      setDivision('IT & Teknologi');
     } catch (err: any) {
-      alert("Registrasi gagal. Coba lagi.");
+      showToast('Registrasi gagal. Silakan coba lagi.', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -1006,23 +1059,48 @@ const Dashboard: React.FC<DashboardProps> = ({ theme }) => {
         }
       }
 
+      // Aggregate real transaction data for the last 6 months
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'];
+      const currentMonth = new Date().getMonth();
+      const dynamicLabels = [];
+      for (let i = 5; i >= 0; i--) {
+        dynamicLabels.push(monthNames[(currentMonth - i + 12) % 12]);
+      }
+      const monthlyIncome = Array(6).fill(0);
+      const monthlyExpense = Array(6).fill(0);
+      
+      transactions.forEach(t => {
+        if (t.status === 'Lunas' && t.transactionDate) {
+          const date = new Date(t.transactionDate);
+          const monthDiff = (new Date().getFullYear() - date.getFullYear()) * 12 + new Date().getMonth() - date.getMonth();
+          if (monthDiff >= 0 && monthDiff < 6) {
+            const index = 5 - monthDiff;
+            if (t.type === 'Pendapatan') {
+              monthlyIncome[index] += t.amount / 1000000;
+            } else if (t.type === 'Pengeluaran') {
+              monthlyExpense[index] += t.amount / 1000000;
+            }
+          }
+        }
+      });
+
       if (mgmtCanvasRef.current && userRole !== 'staff') {
         const mgmtCtx = mgmtCanvasRef.current.getContext('2d');
         if (mgmtCtx) {
           mgmtChart = new window.Chart(mgmtCtx, {
             type: 'bar',
             data: {
-              labels: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun'],
+              labels: dynamicLabels,
               datasets: [
                 {
                   label: 'Total Pendapatan (Juta Rp)',
-                  data: [120, 150, 180, 210, 190, 250],
+                  data: monthlyIncome,
                   backgroundColor: '#10b981',
                   borderRadius: 4,
                 },
                 {
                   label: 'Total Pengeluaran (Juta Rp)',
-                  data: [80, 95, 110, 105, 90, 130],
+                  data: monthlyExpense,
                   backgroundColor: '#f43f5e',
                   borderRadius: 4,
                 }
@@ -1054,7 +1132,7 @@ const Dashboard: React.FC<DashboardProps> = ({ theme }) => {
   };
 
   if (loading) {
-    return <div className="text-xs text-zinc-500 font-mono">Memuat analisis dashboard...</div>;
+    return <SkeletonLoader isDark={isDark} rows={6} />;
   }
 
   // ==========================================
@@ -1392,6 +1470,8 @@ const Transactions: React.FC<TransactionsProps> = ({ theme, userRole }) => {
   const [category, setCategory] = useState('Kontrak Proyek IT');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [formError, setFormError] = useState('');
+  const { showToast } = useToast();
 
   const isDark = theme === 'dark';
   const cardClass = isDark ? 'bg-[#18181b]/50 border-zinc-800/80 text-zinc-300' : 'bg-white border-zinc-200 text-zinc-700 shadow-sm';
@@ -1431,7 +1511,15 @@ const Transactions: React.FC<TransactionsProps> = ({ theme, userRole }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!amount || !description) return;
+    setFormError('');
+    if (!amount || parseFloat(amount) <= 0) {
+      setFormError('Nominal harus lebih dari 0.');
+      return;
+    }
+    if (!description.trim()) {
+      setFormError('Deskripsi transaksi tidak boleh kosong.');
+      return;
+    }
     setSubmitting(true);
     
     let initialStatus = 'Lunas';
@@ -1445,8 +1533,10 @@ const Transactions: React.FC<TransactionsProps> = ({ theme, userRole }) => {
       await api.post('/transactions', payload);
       setAmount('');
       setDescription('');
+      showToast('Transaksi berhasil dicatat.', 'success');
       fetchTransactions();
     } catch (err) {
+      showToast('Gagal mencatat transaksi (menggunakan mock lokal)', 'error');
       const mockNew = {
         transactionId: 'TX-' + Math.floor(Math.random() * 100000).toString().padStart(3, '0'),
         transactionDate: new Date().toISOString().split('T')[0],
@@ -1468,8 +1558,10 @@ const Transactions: React.FC<TransactionsProps> = ({ theme, userRole }) => {
   const handleApprove = async (id: string, approve: boolean) => {
     try {
       await api.post(`/transactions/${id}/approve?approve=${approve}`);
+      showToast(`Transaksi ${approve ? 'disetujui' : 'ditolak'}`, 'success');
       fetchTransactions();
     } catch (err) {
+      showToast('Gagal memproses persetujuan', 'error');
       const updated = transactions.map(t => 
         t.transactionId === id ? { ...t, status: approve ? 'Lunas' : 'Ditolak' } : t
       );
@@ -1482,7 +1574,7 @@ const Transactions: React.FC<TransactionsProps> = ({ theme, userRole }) => {
     return 'Rp ' + val.toLocaleString('id-ID');
   };
 
-  if (loading) return <div className="text-xs text-zinc-500 font-mono">Memuat transaksi...</div>;
+  if (loading) return <SkeletonLoader isDark={isDark} rows={5} />;
 
   const showInputForm = userRole === 'admin' || userRole === 'staff' || !userRole;
 
@@ -1495,8 +1587,8 @@ const Transactions: React.FC<TransactionsProps> = ({ theme, userRole }) => {
           <div>
             <h3 className={`font-extrabold text-xs ${titleClass}`}>Jurnal Kas Finansial</h3>
             <span className="text-[9px] text-zinc-500">Total: {transactions.length} Item</span>
-          </div>
-          <div className="flex items-center gap-2">
+            </div>
+            <div className="flex items-center gap-3">
             <div className={`hidden md:flex items-center gap-2 px-3 py-1.5 border rounded-lg ${isDark ? 'bg-zinc-950/50 border-zinc-800' : 'bg-white border-zinc-250'}`}>
               <span className="material-symbols-outlined text-[14px] text-zinc-500">search</span>
               <input type="text" placeholder="Cari TX-ID..." className="bg-transparent text-[10px] w-24 outline-none placeholder-zinc-500" disabled />
@@ -1601,6 +1693,12 @@ const Transactions: React.FC<TransactionsProps> = ({ theme, userRole }) => {
         <h3 className={`font-extrabold text-xs ${titleClass}`}>Catat Transaksi</h3>
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           
+          {formError && (
+            <div className="bg-red-500/10 text-red-500 font-bold p-2.5 rounded border border-red-500/20 flex items-center gap-2">
+              <span className="material-symbols-outlined text-sm">error</span> {formError}
+            </div>
+          )}
+
           <div className="space-y-1">
             <label className="block font-bold text-zinc-500">Tipe Transaksi</label>
             <select value={type} onChange={(e) => setType(e.target.value)} className={`w-full p-2.5 border rounded-lg focus:border-emerald-500 outline-none ${isDark ? 'bg-zinc-950 border-zinc-800 text-zinc-100' : 'bg-zinc-50 border-zinc-200 text-zinc-900'}`}>
@@ -1701,13 +1799,15 @@ const Payroll: React.FC<PayrollProps> = ({ theme, userRole }) => {
     fetchData();
   }, []);
 
+  const { showToast } = useToast();
+
   const handleProcessPayroll = async () => {
     if (!period) return;
     setProcessing(true);
     try {
       // Coba panggil endpoint process di backend
       await api.post('/payroll/process', { period });
-      alert(`✅ Gaji periode ${period} berhasil diproses dan tersimpan di database!`);
+      showToast(`Gaji periode ${period} berhasil diproses dan tersimpan di database!`, 'success');
       fetchData();
     } catch (err: any) {
       // Jika backend belum punya endpoint process, hitung di frontend dan POST satu per satu ke database
@@ -1739,11 +1839,11 @@ const Payroll: React.FC<PayrollProps> = ({ theme, userRole }) => {
 
         // Simpan setiap record payroll ke database via API
         await Promise.all(processed.map(p => api.post('/payroll', p)));
-        alert(`✅ Gaji ${processed.length} karyawan periode ${period} berhasil diproses dan tersimpan ke database!`);
+        showToast(`Gaji ${processed.length} karyawan periode ${period} berhasil diproses dan tersimpan ke database!`, 'success');
         fetchData();
       } catch (innerErr) {
         console.error('Gagal memproses payroll', innerErr);
-        alert('Gagal memproses payroll. Pastikan backend berjalan dan coba lagi.');
+        showToast('Gagal memproses payroll. Pastikan backend berjalan dan coba lagi.', 'error');
       }
     } finally {
       setProcessing(false);
@@ -1754,7 +1854,7 @@ const Payroll: React.FC<PayrollProps> = ({ theme, userRole }) => {
     return 'Rp ' + val.toLocaleString('id-ID');
   };
 
-  if (loading) return <div className="text-xs text-zinc-500 font-mono">Memuat data payroll...</div>;
+  if (loading) return <SkeletonLoader isDark={isDark} rows={4} />;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -1939,7 +2039,7 @@ const UserApprovals: React.FC<UserApprovalsProps> = ({ theme }) => {
     }
   };
 
-  if (loading) return <div className="text-xs text-zinc-500 font-mono">Memuat antrean registrasi...</div>;
+  if (loading) return <SkeletonLoader isDark={isDark} rows={3} />;
 
   return (
     <div className={`border rounded-xl p-6 space-y-4 backdrop-blur-md animate-fade-in ${cardClass}`}>
@@ -2031,11 +2131,8 @@ const AuditTrail: React.FC<AuditTrailProps> = ({ theme }) => {
         const res = await api.get('/audit-logs');
         setLogs(res.data);
       } catch (err) {
-        setLogs([
-          { logId: 3, userEmail: 'admin@exprogio.com', action: 'PROCESS_PAYROLL', description: 'Melakukan batch processing payroll karyawan periode Juni 2026 senilai Rp 10.426.462', timestamp: new Date().toISOString() },
-          { logId: 2, userEmail: 'admin@exprogio.com', action: 'APPROVE_TRANSACTION', description: 'Menyetujui pengeluaran TX-003 senilai Rp 60.000.000', timestamp: new Date().toISOString() },
-          { logId: 1, userEmail: 'staff@exprogio.com', action: 'SUBMIT_TRANSACTION', description: 'Mengajukan reimbursement transport pengawasan sipil Rp 2.400.000', timestamp: new Date().toISOString() }
-        ]);
+        console.warn('API error, using fallback for Audit Log', err);
+        setLogs([]);
       } finally {
         setLoading(false);
       }
@@ -2043,7 +2140,7 @@ const AuditTrail: React.FC<AuditTrailProps> = ({ theme }) => {
     fetchLogs();
   }, []);
 
-  if (loading) return <div className="text-xs text-zinc-500 font-mono">Memuat log sistem audit...</div>;
+  if (loading) return <SkeletonLoader isDark={isDark} rows={6} />;
 
   return (
     <div className={`border rounded-xl p-6 space-y-4 backdrop-blur-md animate-fade-in ${cardClass}`}>
@@ -2223,13 +2320,15 @@ const AccountsReceivable: React.FC<{ theme: ThemeMode }> = ({ theme }) => {
     return { label: `Menunggak ${diffDays} Hari (Kritis)`, color: 'text-white bg-red-600 font-black animate-pulse' };
   };
 
+  const { showToast } = useToast();
+
   const handleReminder = async (invoiceId: string, client: string) => {
     try {
       await api.post(`/invoices/${invoiceId}/reminder`);
-      alert(`✅ Email Surat Peringatan (SP) Penagihan berhasil dikirim ke klien: ${client}`);
+      showToast(`Email Surat Peringatan (SP) Penagihan berhasil dikirim ke klien: ${client}`, 'success');
     } catch (err) {
       console.error('Gagal kirim penagihan', err);
-      alert(`Gagal mengirim penagihan ke ${client}. Silakan coba lagi.`);
+      showToast(`Gagal mengirim penagihan ke ${client}. Silakan coba lagi.`, 'error');
     }
   };
 
@@ -2247,7 +2346,7 @@ const AccountsReceivable: React.FC<{ theme: ThemeMode }> = ({ theme }) => {
       </div>
 
       <div className={`border rounded-xl p-6 ${cardClass}`}>
-        {loading ? <p className="text-zinc-500 animate-pulse">Memuat data piutang...</p> : (
+        {loading ? <SkeletonLoader isDark={isDark} rows={3} /> : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs whitespace-nowrap">
               <thead>
@@ -2336,6 +2435,8 @@ const AccountsPayable: React.FC<{ theme: ThemeMode }> = ({ theme }) => {
     return { label: `Telat ${diffDays} Hari (Warning)`, color: 'text-red-500 bg-red-500/10 font-bold animate-pulse' };
   };
 
+  const { showToast } = useToast();
+
   const handlePayment = async (vendorInvoiceId: string, vendorName: string) => {
     const confirm = window.confirm(`Konfirmasi pelunasan tagihan ${vendorInvoiceId} kepada ${vendorName}?`);
     if (!confirm) return;
@@ -2344,10 +2445,10 @@ const AccountsPayable: React.FC<{ theme: ThemeMode }> = ({ theme }) => {
       // Refresh data
       const res = await api.get('/payables');
       setPayables(res.data);
-      alert(`✅ Tagihan ${vendorInvoiceId} kepada ${vendorName} berhasil dilunasi dan tercatat di jurnal pengeluaran!`);
+      showToast(`Tagihan ${vendorInvoiceId} kepada ${vendorName} berhasil dilunasi dan tercatat di jurnal pengeluaran!`, 'success');
     } catch (err) {
       console.error('Gagal melunasi tagihan vendor', err);
-      alert('Gagal memproses pembayaran. Silakan coba lagi.');
+      showToast('Gagal memproses pembayaran. Silakan coba lagi.', 'error');
     }
   };
 
@@ -2667,15 +2768,25 @@ const FinancialReportGenerator: React.FC<{ theme: ThemeMode, userRole?: UserRole
 
   const formatCurrency = (val: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
-  const handleDownloadCSV = () => {
-    const csvContent = "data:text/csv;charset=utf-8,Tanggal,Deskripsi,Kategori,Jumlah\n2026-07-01,Lisensi Server AWS Q3,Beban Operasional IT,150000000\n2026-07-15,Langganan Google Workspace,Beban Operasional IT,50000000\n2026-07-28,Maintenance Data Center,Beban Operasional IT,150000000";
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "Rincian_Beban_IT_Juli2026.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownloadCSV = async () => {
+    try {
+      const res = await api.get('/transactions');
+      if (res.data && res.data.length > 0) {
+        exportToExcel(res.data, 'Laporan_Keuangan_FinCorp.csv', {
+          transactionDate: 'Tanggal',
+          type: 'Tipe',
+          category: 'Kategori',
+          description: 'Deskripsi',
+          amount: 'Nominal',
+          status: 'Status'
+        });
+      } else {
+        alert("Tidak ada data transaksi untuk diekspor");
+      }
+    } catch (err) {
+      console.error("Gagal mengambil data untuk export", err);
+      alert("Gagal mengunduh laporan.");
+    }
   };
 
   return (
@@ -2987,6 +3098,12 @@ const App: React.FC = () => {
     if (!authenticated) return <Navigate to="/login" />;
     
     const location = useLocation();
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    
+    // Close mobile menu on route change
+    useEffect(() => {
+      setIsMobileMenuOpen(false);
+    }, [location.pathname]);
     
     // Live Clock
     const [currentTime, setCurrentTime] = useState(new Date());
@@ -3016,10 +3133,29 @@ const App: React.FC = () => {
     };
 
     return (
-      <div className={`flex min-h-screen ${layoutBg} ${isDark ? 'text-zinc-100' : 'text-zinc-800'} font-sans antialiased transition-colors duration-300`}>
+      <div className={`flex flex-col md:flex-row min-h-screen ${layoutBg} ${isDark ? 'text-zinc-100' : 'text-zinc-800'} font-sans antialiased transition-colors duration-300`}>
         
+        {/* Mobile Header */}
+        <div className={`md:hidden flex items-center justify-between p-4 border-b ${sidebarBorder} ${sidebarBg} sticky top-0 z-40`}>
+          <div className="flex items-center gap-2">
+            <img src="/logo.png" alt="PT EXPRO GIO NUSANTARA Logo" className="h-6 w-auto object-contain" />
+            <span className="text-[9px] text-emerald-600 tracking-widest font-bold uppercase mt-1 block">FINCORP</span>
+          </div>
+          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 rounded-lg hover:bg-emerald-500/10 text-emerald-600 transition-colors">
+            <span className="material-symbols-outlined">{isMobileMenuOpen ? 'close' : 'menu'}</span>
+          </button>
+        </div>
+
+        {/* Overlay for mobile */}
+        {isMobileMenuOpen && (
+          <div 
+            className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm"
+            onClick={() => setIsMobileMenuOpen(false)}
+          ></div>
+        )}
+
         {/* Sidebar Navigation */}
-        <aside className={`w-64 ${sidebarBg} flex flex-col justify-between p-6 shrink-0 shadow-2xl border-r ${sidebarBorder} transition-colors print:hidden`}>
+        <aside className={`fixed inset-y-0 left-0 z-50 transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 w-64 ${sidebarBg} flex flex-col justify-between p-6 shrink-0 shadow-2xl border-r ${sidebarBorder} transition-transform duration-300 ease-in-out print:hidden`}>
           <div className="space-y-6">
             <div className="flex items-center gap-3 border-b border-zinc-800 pb-4">
               <img src="/logo.png" alt="PT EXPRO GIO NUSANTARA Logo" className="h-10 w-auto object-contain" />
@@ -3068,7 +3204,7 @@ const App: React.FC = () => {
                     </Link>
                   )}
 
-                  {['superadmin', 'manager'].includes(userRole!) && (
+                  {['superadmin', 'admin', 'manager'].includes(userRole!) && (
                       <Link to="/budgets" className={getLinkClass('/budgets')}>
                         <span className="material-symbols-outlined text-base">account_balance_wallet</span> Manajemen Anggaran
                       </Link>
@@ -3080,7 +3216,7 @@ const App: React.FC = () => {
                       </Link>
                   )}
 
-                  {['superadmin', 'admin', 'staff'].includes(userRole!) && (
+                  {['superadmin', 'admin', 'manager', 'staff'].includes(userRole!) && (
                       <>
                       <Link to="/receivables" className={getLinkClass('/receivables')}>
                         <span className="material-symbols-outlined text-base">request_quote</span> Manajemen Piutang
@@ -3317,4 +3453,11 @@ const AccessDenied: React.FC = () => {
   );
 };
 
-export default App;
+export default function AppWrapper() {
+  const isDark = (localStorage.getItem('theme_mode') as ThemeMode) === 'dark' || true;
+  return (
+    <ToastProvider isDark={isDark}>
+      <App />
+    </ToastProvider>
+  );
+}
