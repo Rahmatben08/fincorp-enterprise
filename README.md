@@ -1,50 +1,78 @@
 # FinCorp Enterprise Portal - Panduan Setup & Troubleshooting
 
-Arsitektur ini didesain menggunakan kontainer Docker untuk mengorkestrasi PostgreSQL database, Keycloak SSO, Java Spring Boot, Go Payroll, dan React Frontend.
+Proyek ini adalah sistem ERP Finansial Terintegrasi (*FinCorp Enterprise Portal*) yang sebelumnya menggunakan arsitektur *microservices* (Spring Boot, Go, React, Keycloak) dan kini telah **dimigrasi sepenuhnya ke arsitektur Monolitik Laravel 11 + React + Vite + Inertia (SPA)** demi kesederhanaan *deployment*, stabilitas *state*, dan performa yang lebih optimal.
+
+Sistem ini mendukung *Multi-role Access Control* tingkat lanjut (Superadmin, Manajer, Staf Keuangan, Karyawan, Investor) dengan *dashboard* analitik terpisah, sistem persetujuan alur kerja ganda, dan *audit trail* komprehensif.
 
 ---
 
-## 🛑 Mengatasi Error: "'docker-compose' is not recognized"
+## 🚀 Fitur Utama (Monolith Version)
+- **Dashboard Dinamis per Role**: *Superadmin* dengan *Eagle Eye*, *Finance Staff* dengan modul operasional, *Manager* dengan persetujuan bertingkat, dsb.
+- **Single Page Application (SPA)**: Navigasi mulus tanpa *reload* halaman menggunakan *React Router* yang terintegrasi di dalam Laravel Blade.
+- **Sistem Modular Keuangan**: Modul Kas Bersih, Piutang (AR), Utang (AP), Penggajian (*Payroll*), Jurnal Transaksi, dan Kalkulator Pajak Otomatis.
+- **Audit Trail Log**: Rekam jejak aktivitas sistem yang transparan dan *immutable* untuk standar pelaporan perusahaan.
+- **Desain Modern & Interaktif**: Menggunakan *Tailwind CSS* dengan warna pastel modern dan *micro-animations*.
 
-Jika Anda mendapatkan error saat menjalankan `docker-compose up --build`, hal ini disebabkan karena **Docker Desktop belum terinstal** di sistem Windows Anda, atau lokasinya belum terdaftar di system Environment Variables (PATH).
+---
 
-### Solusi 1: Menggunakan Docker Desktop (Rekomendasi Enterprise)
-Untuk menjalankan arsitektur terintegrasi ini seutuhnya:
-1. Unduh dan instal **[Docker Desktop untuk Windows](https://www.docker.com/products/docker-desktop/)**.
-2. Pastikan Docker Desktop sedang aktif (ikon paus hijau muncul di system tray).
-3. Buka PowerShell/CMD baru di folder ini, lalu jalankan perintah Docker modern:
+## 🛑 Persyaratan Sistem
+- **PHP** >= 8.2
+- **Composer** (untuk dependensi PHP)
+- **Node.js** v20+ & **npm** (untuk dependensi Frontend)
+- **SQLite / MySQL / PostgreSQL** (dikonfigurasi di file `.env`)
+
+---
+
+## 💻 Cara Menjalankan Secara Lokal (Development)
+
+1. **Persiapan Backend (Laravel)**
+   Arahkan terminal Anda ke dalam direktori aplikasi:
    ```bash
-   docker compose up --build
+   cd fincorp-laravel
    ```
-   *(Catatan: Versi terbaru Docker menggunakan spasi `docker compose` bukan tanda hubung `docker-compose`)*.
-
----
-
-## 💻 Solusi 2: Menjalankan Frontend React Secara Lokal (Tanpa Docker)
-Karena Anda sudah memiliki **Node.js** (v24+) terinstal di Windows Anda, Anda dapat menjalankan dan menguji antarmuka frontend portal secara mandiri:
-
-1. Buka terminal (PowerShell) dan arahkan ke folder frontend:
-   ```powershell
-   cd C:\Users\ghali\.gemini\antigravity\scratch\fincorp-enterprise\fincorp-frontend
+   Instal dependensi Composer dan persiapkan konfigurasi:
+   ```bash
+   composer install
+   cp .env.example .env
+   php artisan key:generate
    ```
-2. Instal dependensi Node:
-   ```powershell
+   Jalankan migrasi dan isi database awal (*seeding*):
+   ```bash
+   php artisan migrate:fresh --seed
+   ```
+   Jalankan server PHP lokal:
+   ```bash
+   php artisan serve
+   ```
+   *(Server akan berjalan di `http://127.0.0.1:8000`)*
+
+2. **Persiapan Frontend (Vite + React)**
+   Buka *tab terminal baru*, masuk ke direktori yang sama, lalu jalankan:
+   ```bash
    npm install
-   ```
-3. Jalankan server pengembangan lokal (Vite):
-   ```powershell
    npm run dev
    ```
-4. Buka browser pada alamat yang tertera (biasanya `http://localhost:5173`).
-   *Catatan: Modul-modul tertentu akan memerlukan autentikasi Keycloak. Jika ingin mencoba fungsionalitas interaktif penuh tanpa login SSO/Keycloak terlebih dahulu, Anda dapat membuka sistem simulasi client-side SPA di folder `fincorp-portal`.*
+   *(Vite akan menangani kompilasi React dan HMR di port `5173`)*
+
+3. **Akses Aplikasi**
+   Buka browser Anda dan navigasikan ke `http://127.0.0.1:8000/`. Halaman utama dan sistem autentikasi siap digunakan.
 
 ---
 
-## ☕ Solusi 3: Menjalankan Backend Java Secara Lokal
-Jika Anda ingin menjalankan backend Java (Spring Boot) secara lokal tanpa Docker, Anda memerlukan database PostgreSQL lokal:
-1. Instal **PostgreSQL** di Windows Anda dan buat database bernama `fincorp_enterprise_db`.
-2. Sesuaikan konfigurasi username dan password database pada berkas [application.yml](file:///C:/Users/ghali/.gemini/antigravity/scratch/fincorp-enterprise/fincorp-backend/src/main/resources/application.yml).
-3. Buka terminal di folder `fincorp-backend` dan jalankan menggunakan Maven Wrapper (jika Maven terinstal):
-   ```powershell
-   mvn spring-boot:run
-   ```
+## 🛠️ Build untuk Production
+
+Untuk membangun aplikasi ini di lingkungan *production* (tanpa *server Vite*), jalankan perintah:
+```bash
+npm run build
+```
+Setelah proses kompilasi selesai, Laravel akan menggunakan versi teroptimasi statis dari *React assets*. Anda hanya perlu menjalankan `php artisan serve` atau *deploy* ke Nginx/Apache.
+
+---
+
+## 📋 Struktur Folder Utama
+- `/app/Http/Controllers`: Menyimpan seluruh *logic* API untuk berbagai modul.
+- `/resources/js`: Menyimpan seluruh kode Frontend (React, Komponen, dan CSS).
+  - `/resources/js/components`: Komponen modular *Dashboard* (*SuperadminPanel*, *ReimbursementPanel*, dll).
+  - `/resources/js/AppOriginal.tsx`: Pintu masuk utama React Router (*Main Router*).
+- `/routes/api.php`: Definisi rute *backend*.
+- `/routes/web.php`: Rute *fallback* untuk SPA React.

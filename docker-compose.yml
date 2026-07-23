@@ -2,96 +2,23 @@ version: '3.8'
 
 services:
   fincorp-db:
-    image: postgres:15-alpine
-    container_name: fincorp-postgres-db
+    image: mariadb:10.11
+    container_name: fincorp-mariadb
     environment:
-      POSTGRES_DB: fincorp_enterprise_db
-      POSTGRES_USER: fincorp_admin
-      POSTGRES_PASSWORD: SecretPassword123
+      MYSQL_DATABASE: fincorp_enterprise_db
+      MYSQL_USER: fincorp_admin
+      MYSQL_PASSWORD: SecretPassword123
+      MYSQL_ROOT_PASSWORD: RootPassword123
     ports:
-      - "5433:5432"
+      - "3306:3306"
     volumes:
-      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
-      - pgdata:/var/lib/postgresql/data
+      - mariadb_data:/var/lib/mysql
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fincorp_admin -d fincorp_enterprise_db"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  fincorp-auth:
-    image: quay.io/keycloak/keycloak:22.0.1
-    container_name: fincorp-keycloak-auth
-    command: start-dev --import-realm
-    environment:
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://fincorp-db:5432/fincorp_enterprise_db
-      KC_DB_USERNAME: fincorp_admin
-      KC_DB_PASSWORD: SecretPassword123
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json
-    depends_on:
-      fincorp-db:
-        condition: service_healthy
-    restart: always
-
-  fincorp-backend:
-    build:
-      context: ./fincorp-backend
-      dockerfile: Dockerfile
-    container_name: fincorp-java-backend
-    ports:
-      - "8081:8081"
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://fincorp-db:5432/fincorp_enterprise_db
-      SPRING_DATASOURCE_USERNAME: fincorp_admin
-      SPRING_DATASOURCE_PASSWORD: SecretPassword123
-      KEYCLOAK_AUTH_SERVER_URL: http://fincorp-auth:8080
-      PAYROLL_SERVICE_URL: http://fincorp-payroll-service:8082
-    depends_on:
-      fincorp-db:
-        condition: service_healthy
-      fincorp-auth:
-        condition: service_started
-    restart: on-failure
-
-  fincorp-payroll-service:
-    build:
-      context: ./fincorp-payroll-service
-      dockerfile: Dockerfile
-    container_name: fincorp-go-payroll
-    ports:
-      - "8082:8082"
-    environment:
-      DB_HOST: fincorp-db
-      DB_PORT: "5432"
-      DB_USER: fincorp_admin
-      DB_PASSWORD: SecretPassword123
-      DB_NAME: fincorp_enterprise_db
-      PORT: "8082"
-    depends_on:
-      fincorp-db:
-        condition: service_healthy
-    restart: always
-
-  fincorp-frontend:
-    build:
-      context: ./fincorp-frontend
-      dockerfile: Dockerfile
-    container_name: fincorp-react-frontend
-    ports:
-      - "3000:3000"
-    environment:
-      REACT_APP_BACKEND_URL: http://localhost:8081
-      REACT_APP_KEYCLOAK_URL: http://localhost:8080
-    depends_on:
-      - fincorp-backend
-    restart: always
-
 volumes:
-  pgdata:
+  mariadb_data:

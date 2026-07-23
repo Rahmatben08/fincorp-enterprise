@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* --------------------------------------------------
+   💅 CUSTOM PREMIUM SCROLLBAR (LIGHT/DARK ADAPTIVE)
+   -------------------------------------------------- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(161, 161, 170, 0.3);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(161, 161, 170, 0.5);
+}
+
+/* Hide standard HTML scrollbar backgrounds */
+.overflow-x-auto {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(161, 161, 170, 0.3) transparent;
+}
+
+/* --------------------------------------------------
+   PRINT MEDIA STYLES
+   -------------------------------------------------- */
+@media print {
+  /* Hide sidebar and navigation */
+  nav, aside, .sidebar, header, .no-print, button {
+    display: none !important;
+  }
+  
+  /* Reset background and colors for printing */
+  body, main, .animate-fade-in {
+    background-color: white !important;
+    color: black !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  /* Ensure tables look good */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+  
+  th, td {
+    border: 1px solid #ddd !important;
+    padding: 8px !important;
+    text-align: left !important;
+    color: black !important;
+  }
+  
+  th {
+    background-color: #f3f4f6 !important;
+    -webkit-print-color-adjust: exact;
+  }
+  
+  /* Expand content to full width */
+  .lg\:col-span-2, .lg\:col-span-3, .max-w-5xl {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  /* Hide dark mode styles */
+  .dark {
+    background-color: white !important;
+    color: black !important;
+  }
+}
